@@ -83,6 +83,7 @@ export function stepBoarding(c: Combat, dt: number) {
   if (c.paused || c.result || dt <= 0) return;
   for (const faction of ['player', 'enemy'] as const) {
     const hook = c.boarding.hooks[faction]; hook.cooldown = Math.max(0, hook.cooldown - dt);
+    if (hook.cooldown < 1e-8) hook.cooldown = 0;
     // Take the next request only on a tick that starts with a free slot.
     if (!hook.active) {
       hook.queue = hook.queue.filter(id => { const p = find(c, id); return !!p?.transit && conscious(p); });

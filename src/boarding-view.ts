@@ -13,42 +13,45 @@ export function roomActionLabel(mode: CommandMode, ship: ShipId, room: number): 
 /** A owns lifecycle, first-tap pause, room routing and mounting. No automatic entry point. */
 export function mountBoarding(root: HTMLElement, read: () => BoardingViewState, commands: BoardingCommands) {
   const panel = document.createElement('section'); panel.className = 'boarding-r2'; panel.setAttribute('aria-label', 'Boarding orders'); root.append(panel);
+  // Keep touch targets and scrolling containers alive across simulation refreshes.
+  const roster = document.createElement('div'); roster.className = 'boarding-roster';
+  const status = document.createElement('p'); status.setAttribute('role', 'status');
+  const actions = document.createElement('div'); actions.className = 'boarding-actions';
+  const enemies = document.createElement('div'); enemies.className = 'boarding-roster';
+  const actionButtons = ['board', 'retreat', 'cancel'].map(action => {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.action = action;
+    b.textContent = action === 'board' ? 'Board → choose enemy room' : action === 'retreat' ? 'Retreat to home Cargo' : 'Cancel pending order';
+    actions.append(b); return b;
+  });
+  panel.append(roster, status, actions, enemies);
   let disposed = false;
+  function renderRoster(container: HTMLElement, crew: Combat['player']['crew'], selectedId: string | null, finished: boolean, enemy: boolean) {
+    for (const card of Array.from(container.querySelectorAll<HTMLButtonElement>('button'))) {
+      if (!crew.some(p => p.id === card.dataset.crew)) card.remove();
+    }
+    crew.forEach((p, index) => {
+      let card = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(b => b.dataset.crew === p.id);
+      if (!card) { card = document.createElement('button'); card.type = 'button'; card.dataset.crew = p.id; }
+      card.setAttribute('aria-pressed', String(p.id === selectedId));
+      const text = `${enemy ? '◆ Enemy ' : '● '}${p.name} · ${Math.ceil(p.health)} HP · ${locationLabel(p)}`;
+      if (card.textContent !== text) card.textContent = text;
+      card.disabled = finished;
+      if (container.children[index] !== card) container.insertBefore(card, container.children[index] ?? null);
+    });
+  }
   function render() {
     if (disposed) return;
     const { combat: c, selectedId, mode } = read();
-    const focused = panel.contains(document.activeElement) ? document.activeElement as HTMLButtonElement : null;
-    const focusCrew = focused?.dataset.crew, focusAction = focused?.dataset.action;
-    panel.replaceChildren();
-    const roster = document.createElement('div'); roster.className = 'boarding-roster';
-    for (const p of c.player.crew) {
-      const card = document.createElement('button'); card.type = 'button'; card.dataset.crew = p.id;
-      card.setAttribute('aria-pressed', String(p.id === selectedId));
-      card.textContent = `● ${p.name} · ${Math.ceil(p.health)} HP · ${locationLabel(p)}`;
-      card.disabled = !!c.result; roster.append(card);
-    }
-    panel.append(roster);
+    renderRoster(roster, c.player.crew, selectedId, !!c.result, false);
+    renderRoster(enemies, c.enemy.crew, selectedId, !!c.result, true);
     const p = c.player.crew.find(p => p.id === selectedId);
-    const status = document.createElement('p'); status.setAttribute('role', 'status');
     const cooldown = c.boarding.hooks.player.cooldown;
-    status.textContent = `${mode} · ${cooldown > 0 ? `Hook cooling down (${Math.ceil(cooldown)}s)` : 'Hook ready'}${p?.health === 0 ? ' · Crew incapacitated' : ''}`;
-    panel.append(status);
-    if (p) {
-      const actions = document.createElement('div'); actions.className = 'boarding-actions';
-      const add = (action: string, text: string, disabled: boolean) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.action = action; b.textContent = text; b.disabled = disabled || !!c.result || p.health <= 0 || p.transit?.phase === 'crossing'; actions.append(b); };
-      if (p.shipId === 'player') add('board', 'Board → choose enemy room', cooldown > 0);
-      else add('retreat', 'Retreat to home Cargo', false);
-      if (p.transit) add('cancel', 'Cancel pending order', false);
-      panel.append(actions);
+    const text = `${mode} · ${cooldown > 0 ? `Hook cooling down (${Math.ceil(cooldown)}s)` : 'Hook ready'}${p?.health === 0 ? ' · Crew incapacitated' : ''}`;
+    if (status.textContent !== text) status.textContent = text;
+    for (const b of actionButtons) {
+      b.hidden = !p || (b.dataset.action === 'board' ? p.shipId !== 'player' : b.dataset.action === 'retreat' ? p.shipId === 'player' : !p.transit);
+      b.disabled = !p || !!c.result || p.health <= 0 || p.transit?.phase === 'crossing' || (b.dataset.action === 'board' && cooldown > 0);
     }
-    const enemies = document.createElement('div'); enemies.className = 'boarding-roster';
-    for (const enemy of c.enemy.crew) {
-      const b = document.createElement('button'); b.type = 'button'; b.dataset.crew = enemy.id;
-      b.textContent = `◆ Enemy ${enemy.name} · ${Math.ceil(enemy.health)} HP · ${locationLabel(enemy)}`;
-      b.setAttribute('aria-pressed', String(enemy.id === selectedId)); b.disabled = !!c.result; enemies.append(b);
-    }
-    panel.append(enemies);
-    if (focusCrew || focusAction) Array.from(panel.querySelectorAll('button')).find(b => focusCrew ? b.dataset.crew === focusCrew : b.dataset.action === focusAction)?.focus({ preventScroll: true });
   }
   const click = (event: Event) => {
     const b = (event.target as Element).closest<HTMLButtonElement>('button'); if (!b || b.disabled || !panel.contains(b)) return;

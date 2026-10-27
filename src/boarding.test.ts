@@ -10,6 +10,27 @@ function locate(p: Pirate, ship: 'player' | 'enemy', room: number) { p.shipId = 
 function invader(c: Combat, room: number) { const p = c.player.crew[0]; locate(p, 'enemy', room); c.enemy.crew = []; return p; }
 function snapshot(c: Combat) { return JSON.stringify(c); }
 describe('grapple lifecycle and occupancy', () => {
+  it('makes the hook available after exactly twelve active seconds', () => {
+    const c = fixture(), p = c.player.crew[0]; c.enemy.crew = [];
+    locate(p, 'player', 4); queueBoard(c, p.id, 4); advance(c, 5.1);
+    expect(c.boarding.hooks.player.cooldown).toBe(12);
+    queueRetreat(c, p.id); advance(c, 12);
+    expect(p.shipId).toBe('player');
+    expect(c.boarding.hooks.player.cooldown).toBe(0);
+    expect(queueBoard(c, p.id, 5)).toEqual({ ok: true });
+  });
+  it('freezes nonzero capture, movement, cooldown and an imminent AI decision together', () => {
+    const c = fixture(), p = c.player.crew[0]; locate(p, 'enemy', 5);
+    moveCrewById(c, c.player.crew[1].id, 'player', 4);
+    c.boarding.aiEnabled = true; c.boarding.aiClock = 1.9;
+    c.boarding.hooks.player.cooldown = 7; c.boarding.capture.enemy[5].progress = 2.9;
+    c.paused = true; const before = snapshot(c);
+    advance(c, 30); stepBoarding(c, 30); expect(snapshot(c)).toBe(before);
+    c.paused = false; advance(c, .1);
+    expect(c.boarding.capture.enemy[5].captured).toBe(true);
+    expect(c.boarding.hooks.player.cooldown).toBeCloseTo(6.9);
+    expect(c.enemy.crew.some(p => p.destination === 5)).toBe(true);
+  });
   it.each(['player', 'enemy'] as const)('boards and retreats with timed phases for %s', faction => {
     const c = fixture(), p = c[faction].crew[0], destination = faction === 'player' ? 'enemy' : 'player';
     locate(p, faction, 4);
