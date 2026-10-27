@@ -194,6 +194,7 @@ function finish(victory: boolean) {
 }
 // Trap focus inside modal dialogs, preserving keyboard use alongside touch.
 document.addEventListener('keydown', e => {
+  if (app.inert) return;
   if (modal && e.key === 'Tab') {
     const focusable = [...document.querySelectorAll<HTMLButtonElement>('#modal button:not(:disabled)')];
     if (!focusable.length) return;
@@ -203,7 +204,21 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space' && screen === 'battle' && !modal && (e.target as HTMLElement).tagName !== 'BUTTON') { e.preventDefault(); togglePause(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-window.addEventListener('resize', () => { if (matchMedia('(orientation: portrait)').matches) pause(); lastLayout = ''; draw(); });
+let landscapeFocus: HTMLElement | null = null;
+function syncOrientation() {
+  const portrait = matchMedia('(orientation: portrait)').matches;
+  if (portrait && !app.inert) {
+    landscapeFocus = app.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
+    pause();
+  }
+  // The visual curtain alone cannot block focused keyboard or assistive controls.
+  app.inert = portrait;
+  if (!portrait && landscapeFocus) {
+    if (landscapeFocus.isConnected) landscapeFocus.focus();
+    landscapeFocus = null;
+  }
+}
+window.addEventListener('resize', () => { syncOrientation(); lastLayout = ''; draw(); });
 const rotate = document.createElement('div'); rotate.className = 'rotate-overlay'; rotate.innerHTML = '<span>↻</span><h2>Turn the tide.</h2><p>Rotate your phone to landscape<br>to captain the Wayward.</p><small>YOUR VOYAGE IS PAUSED</small>'; document.body.appendChild(rotate);
 function frame(timestamp: number) {
   const dt = previous ? Math.min((timestamp - previous) / 1000, .25) : 0; previous = timestamp;
@@ -218,5 +233,5 @@ function frame(timestamp: number) {
   }
   requestAnimationFrame(frame);
 }
-renderMap(); requestAnimationFrame(frame);
+renderMap(); syncOrientation(); requestAnimationFrame(frame);
 // Deliberately no persistent save: this slice is one short, replayable voyage.
