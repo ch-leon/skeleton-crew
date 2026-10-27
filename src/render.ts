@@ -1,6 +1,7 @@
+import { occupants, allCrew } from './boarding';
 import { type Combat, type Ship, ROOM_NAMES, type Pirate } from './combat';
 export interface Box { x: number; y: number; w: number; h: number; enemy: boolean; index: number }
-export const colors = ['#e9bb70', '#8fe6bd', '#82bbcf'];
+export const colors = ['#e9bb70', '#8fe6bd', '#82bbcf', '#cf9ce0', '#eaa89b'];
 export function skull(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, color = '#c9d5c8') {
   ctx.save(); ctx.translate(x, y); ctx.scale(s / 24, s / 24); ctx.fillStyle = color;
   ctx.beginPath(); ctx.ellipse(0, -2, 10, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(-6, 3, 12, 7);
@@ -9,12 +10,15 @@ export function skull(ctx: CanvasRenderingContext2D, x: number, y: number, s: nu
 }
 function pirate(ctx: CanvasRenderingContext2D, p: Pirate, index: number, x: number, y: number, selected: boolean) {
   ctx.save(); ctx.translate(x, y); ctx.globalAlpha = p.health <= 0 ? .25 : p.travel > 0 ? .55 : 1;
-  if (selected) { ctx.strokeStyle = colors[index]; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 2, 13, 16, 0, 0, 7); ctx.stroke(); }
-  ctx.fillStyle = colors[index]; ctx.beginPath(); ctx.arc(0, -5, 5, 0, 7); ctx.fill(); ctx.fillRect(-6, 1, 12, 10);
+  if (selected) { ctx.strokeStyle = colors[index % colors.length]; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 2, 13, 16, 0, 0, 7); ctx.stroke(); }
+  ctx.fillStyle = p.faction === 'enemy' ? '#ed9180' : colors[index % colors.length]; ctx.beginPath(); ctx.arc(0, -5, 5, 0, 7); ctx.fill(); ctx.fillRect(-6, 1, 12, 10);
   ctx.fillStyle = '#142831'; ctx.fillRect(-7, -10, 14, 3); ctx.fillRect(-4, -13, 8, 4); ctx.fillRect(-1, -6, 5, 2);
+  ctx.fillStyle = p.faction === 'enemy' ? '#ed9180' : '#a4bab4';
+  if (p.faction === 'enemy') { ctx.beginPath(); ctx.moveTo(8, -5); ctx.lineTo(13, 0); ctx.lineTo(8, 5); ctx.lineTo(3, 0); ctx.fill(); } else { ctx.fillRect(8, -4, 5, 5); }
   ctx.fillStyle = '#a4bab4'; ctx.fillRect(-4, 11, 3, 4); ctx.fillRect(2, 11, 3, 4); ctx.restore();
 }
-export function drawBattle(canvas: HTMLCanvasElement, c: Combat, selected: number | null, aim: boolean, time: number): Box[] {
+export function drawBattle(canvas: HTMLCanvasElement, c: Combat, selected: number | string | null, aim: boolean, time: number): Box[] {
+  const selectedPirate = typeof selected === 'string' ? allCrew(c).find(p => p.id === selected) : selected === null ? undefined : c.player.crew[selected];
   const rect = canvas.getBoundingClientRect(), w = rect.width, h = rect.height;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
@@ -64,12 +68,20 @@ export function drawBattle(canvas: HTMLCanvasElement, c: Combat, selected: numbe
       if (r.health < 65) { ctx.strokeStyle = '#8b7055'; ctx.beginPath(); ctx.moveTo(x + rw * .7, y + 3); ctx.lineTo(x + rw * .6, y + 13); ctx.lineTo(x + rw * .75, y + 24); ctx.stroke(); }
       if (r.water > .01) { ctx.fillStyle = '#327e9c80'; ctx.fillRect(x, y + rh * (1 - r.water), rw, rh * r.water); }
       if (r.fire > .01) { ctx.fillStyle = '#f2984566'; ctx.fillRect(x, y, rw, rh); ctx.fillStyle = '#ffb65e'; for (let f = 0; f < 3; f++) { const fx = x + rw * (.25 + f * .25), fy = y + rh - 7; ctx.beginPath(); ctx.moveTo(fx - 5, fy); ctx.quadraticCurveTo(fx - 9, fy - 9, fx + Math.sin(time * 5 + f) * 4, fy - 16 - r.fire * 10); ctx.quadraticCurveTo(fx + 10, fy - 6, fx + 5, fy); ctx.fill(); } }
-      ctx.strokeStyle = targeted ? '#e7ad68' : !enemy && selected !== null && c.player.crew[selected].destination === i ? colors[selected] : enemy && aim ? '#71b593' : '#40524c'; ctx.lineWidth = targeted ? 2 : 1; ctx.strokeRect(x + .5, y + .5, rw - 1, rh - 1);
+      ctx.strokeStyle = targeted ? '#e7ad68' : selectedPirate?.shipId === (enemy ? 'enemy' : 'player') && selectedPirate.destination === i ? colors[c.player.crew.indexOf(selectedPirate) % colors.length] : enemy && aim ? '#71b593' : '#40524c'; ctx.lineWidth = targeted ? 2 : 1; ctx.strokeRect(x + .5, y + .5, rw - 1, rh - 1);
       ctx.fillStyle = enemy ? '#a3c4b1' : '#ccd3bf'; ctx.font = `${w < 750 ? 10 : 12}px ui-monospace, monospace`; ctx.textAlign = 'left';
       ctx.fillText(ROOM_NAMES[i], x + 6, y + 14);
       ctx.fillStyle = '#354c48'; ctx.fillRect(x + 5, y + rh - 5, rw - 10, 2); ctx.fillStyle = r.health < 40 ? '#df8f68' : '#83a596'; ctx.fillRect(x + 5, y + rh - 5, (rw - 10) * r.health / 100, 2);
-      const crew = s.crew.map((p, pi) => ({ p, pi })).filter(({ p }) => p.room === i);
-      crew.forEach(({ p, pi }, ci) => pirate(ctx, p, pi, x + rw * (ci + 1) / (crew.length + 1), y + rh * .58, selected === pi));
+      const capture = c.boarding.capture[enemy ? 'enemy' : 'player'][i];
+      if (capture.progress > 0 || capture.captured) {
+        ctx.save(); ctx.beginPath(); ctx.rect(x, y, rw, rh); ctx.clip(); ctx.strokeStyle = '#e9bb70'; ctx.lineWidth = 2;
+        if (capture.captured) for (let n = -rh; n < rw; n += 12) { ctx.beginPath(); ctx.moveTo(x + n, y + rh); ctx.lineTo(x + n + rh, y); ctx.stroke(); }
+        ctx.fillStyle = '#e9bb70'; ctx.fillRect(x, y + rh - 9, rw * capture.progress / 3, 3); ctx.restore();
+        ctx.fillStyle = '#e9bb70'; ctx.font = '11px ui-monospace, monospace'; ctx.fillText(capture.captured ? 'CAPTURED' : 'Capturing…', x + 5, y + 28);
+      }
+      const crew = occupants(c, enemy ? 'enemy' : 'player', i);
+      crew.slice(0, 2).forEach((p, ci) => pirate(ctx, p, Math.max(0, c.player.crew.indexOf(p)), x + rw * (ci + 1) / (Math.min(crew.length, 2) + 1), y + rh * .58, selectedPirate?.id === p.id));
+      if (crew.length > 2) { ctx.fillStyle = '#d5dfcd'; ctx.font = 'bold 12px monospace'; ctx.fillText(`${crew.length} crew · roster`, x + 5, y + rh - 12); }
       if (r.breach > .01) { ctx.fillStyle = '#93cfe0'; ctx.font = 'bold 16px serif'; ctx.fillText('≋', x + rw - 19, y + 29); }
       if (targeted) { ctx.strokeStyle = '#e7ad68'; ctx.beginPath(); ctx.arc(x + rw - 12, y + 12, 5, 0, 7); ctx.stroke(); }
     }
@@ -77,6 +89,15 @@ export function drawBattle(canvas: HTMLCanvasElement, c: Combat, selected: numbe
     if (s.ward > .1) { ctx.strokeStyle = `rgba(127,224,177,${.12 + s.ward / 35})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx + shipW / 2, top + roomH, shipW * .51, roomH * 1.22, 0, Math.PI, Math.PI * 2); ctx.stroke(); }
   }
   ship(c.player, false); ship(c.enemy, true);
+  for (const p of allCrew(c)) {
+    const t = p.transit; if (t?.phase !== 'crossing') continue;
+    const from = boxes.find(b => b.enemy === (t.originShip === 'enemy') && b.index === t.originRoom)!;
+    const to = boxes.find(b => b.enemy === (t.destinationShip === 'enemy') && b.index === t.destinationRoom)!;
+    const progress = 1 - t.remaining / 3;
+    ctx.strokeStyle = p.faction === 'enemy' ? '#ed9180' : '#e9bb70'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(from.x + from.w / 2, from.y + from.h / 2); ctx.lineTo(to.x + to.w / 2, to.y + to.h / 2); ctx.stroke();
+    pirate(ctx, p, Math.max(0, c.player.crew.indexOf(p)), from.x + from.w / 2 + (to.x + to.w / 2 - from.x - from.w / 2) * progress, from.y + from.h / 2 + (to.y + to.h / 2 - from.y - from.h / 2) * progress, selectedPirate?.id === p.id);
+  }
   for (const e of c.effects) {
     const target = boxes.find(b => b.enemy === !e.fromEnemy && b.index === e.room)!;
     const source = boxes.find(b => b.enemy === e.fromEnemy && b.index === 0)!;

@@ -1,0 +1,9 @@
+.boarding-r2 { color: #d5dfcd; background: #10252b; font-size: 14px; max-height: 100%; overflow: auto; padding: 4px; }
+.boarding-r2 .boarding-roster { display: flex; gap: 6px; overflow-x: auto; }
+.boarding-r2 button { min-width: 44px; min-height: 44px; touch-action: manipulation; color: inherit; background: #193840; border: 1px solid #83a596; padding: 6px 10px; font: inherit; }
+.boarding-r2 .boarding-roster button { flex: 0 0 180px; text-align: left; }
+.boarding-r2 button[aria-pressed="true"] { border: 2px solid #e9bb70; }
+.boarding-r2 button:focus-visible { outline: 3px solid #e9bb70; outline-offset: 2px; }
+.boarding-r2 button:disabled { border-style: dashed; }
+.boarding-r2 .boarding-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.boarding-r2 p { margin: 4px 0; }

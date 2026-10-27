@@ -64,14 +64,40 @@ describe('combat rules', () => {
   it('checks defeat before victory on a simultaneous sinking', () => {
     const c = createCombat(makeShip()); c.player.hull = 0; c.enemy.hull = 0; c.paused = false; step(c, .1); expect(c.result).toBe('lose');
   });
-  it('normal station management keeps baseline battles near the 3–5 minute target', () => {
+  // No balance constants were retuned for boarding: retain the original 180–300s gate
+  // independently for unmoving defenders and for the deterministic boarding AI.
+  it.each([false, true])('normal station management stays near 3–5 minutes (AI boarding=%s)', aiEnabled => {
     const timings: number[] = [];
     for (let seed = 1; seed <= 20; seed++) {
-      const c = createCombat(makeShip(), false, seeded(seed)); c.paused = false; c.target = 4;
+      const c = createCombat(makeShip(), false, seeded(seed)); c.paused = false; c.target = 4; c.boarding.aiEnabled = aiEnabled;
       advance(c, 600); expect(c.result).toBe('win'); timings.push(c.elapsed);
     }
     const average = timings.reduce((a, b) => a + b, 0) / timings.length;
-    console.log(`Baseline average: ${average.toFixed(1)}s, range ${Math.min(...timings).toFixed(1)}–${Math.max(...timings).toFixed(1)}s`);
+    console.log(`AI boarding=${aiEnabled}, baseline average: ${average.toFixed(1)}s, range ${Math.min(...timings).toFixed(1)}–${Math.max(...timings).toFixed(1)}s`);
     expect(average).toBeGreaterThanOrEqual(180); expect(average).toBeLessThanOrEqual(300);
+  });
+});
+
+describe('resolved equipment snapshot integration (C adapter fixtures)', () => {
+  const chainshot = { weapon: { damage: 6, reload: 14, roomMultiplier: 3 }, damageControlMultiplier: 1.2, wardCapacity: 16 };
+  it('uses the resolved reload, ward cap and home damage control without stacking', () => {
+    const player = makeShip();
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const c = createCombat(player, false, () => .99, chainshot); c.boarding.aiEnabled = false; c.paused = false;
+      expect(c.player.ward).toBe(16); c.player.rooms[3].health = 20; advance(c, 1);
+      expect(c.player.charge).toBeCloseTo(1 / 14 * 1.25);
+      expect(c.player.rooms[3].health).toBeCloseTo(20 + 3 * 1.8 * 1.2);
+      expect(c.modifiers.weapon).not.toBe(chainshot.weapon);
+    }
+    expect(chainshot.damageControlMultiplier).toBe(1.2);
+  });
+  it('uses remaining unwarded damage and resolved room multiplier; keeps ward and dodge semantics', () => {
+    const c = createCombat(makeShip(), false, () => .99, chainshot); c.boarding.aiEnabled = false;
+    c.enemy.ward = 2; c.enemy.hitAgo = 0; c.player.charge = 1; c.paused = false; advance(c, .1);
+    expect(c.enemy.hull).toBe(126); expect(c.enemy.rooms[0].health).toBe(88);
+    c.enemy.ward = 12; const hull = c.enemy.hull, health = c.enemy.rooms[0].health;
+    impact(c, c.enemy, 0, 6, false, 3); expect(c.enemy.hull).toBe(hull); expect(c.enemy.rooms[0].health).toBe(health);
+    c.enemy.power.sails = 1; c.rng = () => 0; impact(c, c.enemy, 0, 6, false, 3);
+    expect(c.enemy.hull).toBe(hull); expect(c.effects.at(-1)?.kind).toBe('dodge');
   });
 });
