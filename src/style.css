@@ -13,3 +13,12 @@ body.in-battle{overflow:hidden}.charge-badge{font:9px var(--mono);color:var(--br
 
 .battlefield{margin-left:env(safe-area-inset-left);margin-right:env(safe-area-inset-right)}
 @media(max-height:374px) and (orientation:landscape){header{height:44px}.battle-screen{height:calc(100dvh - 44px);min-height:0}.battle-status{height:20px}.battlefield{min-height:117px}.crew-roster{height:44px}.crew-card{padding-top:2px;padding-bottom:2px}.crew-avatar{height:28px}.crew-info strong{font-size:12px}.power-rail{height:51px;min-height:51px}.system{grid-template-rows:51px}.system-label{height:51px;padding-top:1px}.power-pips{margin-bottom:2px}.system-label>span{font-size:13px;line-height:14px}.pause-banner small{display:none}.pause-banner{top:3%}}
+
+/* Shared round-two roster and feature lifecycle roots. */
+.crew-roster{display:flex;overflow-x:auto;overscroll-behavior-x:contain}
+.crew-card{flex:1 0 210px;min-width:210px;min-height:44px}
+.crew-avatar{color:var(--crew-color,#e3b474)}
+.unavailable-port{padding:20px max(20px,env(safe-area-inset-left));max-width:650px;font-size:14px}
+.unavailable-port p{line-height:1.6}
+#boarding-root:empty{display:none}
+@media(max-height:470px) and (orientation:landscape){.crew-card{flex-basis:210px}.unavailable-port{padding-top:12px}}
