@@ -1,0 +1,22 @@
+.port-r2 { height: calc(100dvh - 78px); min-height: 220px; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 12px max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); color: #e5e6d2; font-size: 14px; background: #0b252d; }
+.port-r2 .port-heading { display: flex; align-items: baseline; gap: 20px; }
+.port-r2 h1 { font-size: 28px; letter-spacing: 0; }
+.port-r2 p { margin: 0; line-height: 1.5; }
+.port-r2 .port-heading p { color: #a9dfb8; }
+.port-r2 .port-balances { line-height: 1.5; color: #e9c68b; }
+.port-r2 .port-panes { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(260px, 3fr); gap: 12px; min-height: 0; }
+.port-r2 .port-catalog, .port-r2 .port-details { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border: 1px solid #45615c; padding: 8px; }
+.port-r2 .port-catalog { display: flex; flex-direction: column; gap: 8px; }
+.port-r2 button { min-width: 44px; min-height: 44px; flex-shrink: 0; font: inherit; padding: 10px 12px; border: 1px solid #77998a; background: #193840; text-align: left; touch-action: manipulation; }
+.port-r2 button[aria-pressed="true"] { border-color: #e9c68b; box-shadow: inset 4px 0 #e9c68b; }
+.port-r2 button:focus-visible { outline: 2px solid #e9c68b; outline-offset: -3px; }
+.port-r2 h2 { font-size: 22px; letter-spacing: 0; margin: 0 0 10px; }
+.port-r2 .port-details p { margin-bottom: 10px; }
+.port-r2 .port-reason { color: #e9c68b; }
+.port-r2 .port-buy, .port-r2 .port-leave { color: #102e2b; background: #a9dfb8; }
+.port-r2 .port-buy:disabled { background: #193840; color: #e5e6d2; border-style: dashed; }
+.port-r2 footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.port-r2 .port-message { flex: 1; }
+@media (max-height: 700px) and (orientation: landscape) { .port-r2 { height: calc(100dvh - 54px); } }
+@media (max-height: 470px) and (orientation: landscape) { .port-r2 { height: calc(100dvh - 48px); gap: 5px; padding-top: 6px; } .port-r2 h1 { font-size: 22px; } }
+@media (max-height: 374px) and (orientation: landscape) { .port-r2 { height: calc(100dvh - 44px); } }

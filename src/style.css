@@ -21,4 +21,7 @@ body.in-battle{overflow:hidden}.charge-badge{font:9px var(--mono);color:var(--br
 .unavailable-port{padding:20px max(20px,env(safe-area-inset-left));max-width:650px;font-size:14px}
 .unavailable-port p{line-height:1.6}
 #boarding-root:empty{display:none}
+.orders-button{min-height:44px;min-width:44px;flex-shrink:0;padding:8px;background:#193840;border:1px solid #83a596;font:12px var(--mono)}
+.command-strip #command-hint{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#boarding-root{max-height:180px;overflow:auto}
 @media(max-height:470px) and (orientation:landscape){.crew-card{flex-basis:210px}.unavailable-port{padding-top:12px}}

@@ -3,6 +3,11 @@ import { createCombat, type Combat } from './combat';
 import { BOSS, nodeAt, passages } from './chart';
 import { commitJump, completeVisit, createRun, initializePort } from './run';
 import type { BoardingAdapter, FeatureAdapters, PortAdapter, RunState } from './contracts';
+import { queueBoard, queueRetreat, moveCrewById, stepBoarding, finalizeBoarding } from './boarding';
+import { step } from './combat';
+import { createPortStock, quotePurchase, purchase } from './port';
+import { deriveModifiers } from './equipment';
+import { routeRoomOrder } from './contracts';
 
 // Boundary fixtures exercise A's wiring only. They do not implement, or assert
 // the correctness of, C's catalog/effects or B's boarding simulation.
@@ -101,5 +106,60 @@ describe('explicit battlefield command routing',()=>{
     const move=vi.fn(()=>({ok:true as const})); features.boarding!.moveCrewById=move;
     routeRoomOrder(combat,'move','fixture-unique-id','enemy',4,features);
     expect(move).toHaveBeenCalledWith(combat,'fixture-unique-id','enemy',4); expect(combat.target).toBe(0);
+  });
+});
+
+describe('round two with real shop, equipment and boarding', () => {
+  const features: FeatureAdapters = {
+    port: { createPortStock, quotePurchase, purchase, mount: () => ({ dispose() {} }) },
+    boarding: { queueBoard, queueRetreat, moveCrewById, stepBoarding, finalizeBoarding, mount: () => ({ dispose() {} }) },
+    createBattle: (run, boss) => createCombat(run.player, boss, () => .99, deriveModifiers(run.equipment)),
+  };
+  it('takes a port route, buys persistent equipment and a recruit, boards/retreats, rescues once and enters the boss', () => {
+    const run = createRun(44); run.chart.edges.forEach(e => e.jumpCost = 1);
+    arrive(run, passages(run.chart, run.currentNode)[0].to); resolve(run, features);
+    arrive(run, passages(run.chart, run.currentNode)[0].to); resolve(run, features);
+    arrive(run, run.chart.nodes.find(n => n.kind === 'port')!.id);
+    initializePort(run, features); const stock = run.activeVisit!.stock;
+    run.gold = 200; // Pure acceptance fixture funds every integration seam.
+    for (const id of ['recruit-gunner', 'chainshot', 'shipwrights-knot', 'witchglass']) expect(purchase(run, stock, id).ok).toBe(true);
+    const recruit = run.player.crew.at(-1)!, equipment = structuredClone(run.equipment);
+    const portVisit = run.activeVisit!.id; expect(completeVisit(run, portVisit, { kind: 'port' }, features)).toBe(true);
+    const optional = run.chart.nodes.find(n => n.depth === 4 && n.kind === 'battle')!;
+    arrive(run, optional.id); const c = features.createBattle!(run, false);
+    expect(c.player.crew.at(-1)).toBe(recruit); expect(c.player.ward).toBe(16);
+    expect(c.modifiers).toMatchObject({ weapon: { reload: 14, damage: 6, roomMultiplier: 3 }, damageControlMultiplier: 1.2 });
+    c.boarding.aiEnabled = false; c.enemy.crew.forEach(p => p.health = 0); c.enemy.power.cannons = 0;
+    c.target = 2;
+    expect(routeRoomOrder(c, 'board', recruit.id, 'enemy', 0, features).ok).toBe(true);
+    expect(c.target).toBe(2); const paused = structuredClone({ player: c.player, boarding: c.boarding, elapsed: c.elapsed });
+    step(c, 10); expect({ player: c.player, boarding: c.boarding, elapsed: c.elapsed }).toEqual(paused);
+    c.paused = false; for (let i = 0; i < 100; i++) step(c, .1);
+    expect(recruit.shipId).toBe('enemy'); expect(recruit.transit).toBeNull(); expect(recruit.room).toBe(0);
+    c.paused = true; expect(queueRetreat(c, recruit.id).ok).toBe(true);
+    c.paused = false; for (let i = 0; i < 100; i++) step(c, .1);
+    expect(recruit).toMatchObject({ shipId: 'player', room: 4, transit: null });
+    // Recruits use the same work path, with the purchased home damage-control bonus.
+    c.player.rooms[4].health = 50; recruit.health = 90;
+    const health = c.player.rooms[4].health; step(c, .1); expect(c.player.rooms[4].health).toBeGreaterThan(health);
+    const wallet = run.gold, visitId = run.activeVisit!.id;
+    c.enemy.hull = 0; step(c, .1); expect(c.result).toBe('win');
+    expect(completeVisit(run, visitId, { kind: 'battle', combat: c }, features)).toBe(true);
+    expect(recruit).toMatchObject({ shipId: 'player', room: 4, transit: null, health: 100 });
+    expect(run.gold).toBe(wallet + 35); expect(run.equipment).toEqual(equipment);
+    expect(completeVisit(run, visitId, { kind: 'battle', combat: c }, features)).toBe(false); expect(run.gold).toBe(wallet + 35);
+    arrive(run, passages(run.chart, run.currentNode)[0].to); resolve(run, features); arrive(run, BOSS);
+    const boss = features.createBattle!(run, true); expect(boss.player.crew.at(-1)!.id).toBe(recruit.id); expect(boss.player.ward).toBe(16);
+    boss.enemy.hull = 0; boss.paused = false; step(boss, .1);
+    expect(completeVisit(run, run.activeVisit!.id, { kind: 'battle', combat: boss }, features)).toBe(true);
+    expect(run.terminalOutcome).toBe('win'); expect(run.equipment).toEqual(equipment);
+  });
+  it('fatal fog before the port prevents stock creation and purchases', () => {
+    const run = createRun(9), port = run.chart.nodes.find(n => n.kind === 'port')!;
+    const source = run.chart.edges.find(e => e.to === port.id)!;
+    run.currentNode = source.from; run.clearedNodeIds.push(source.from); run.fogFront = 3; run.fogContacts = 1;
+    const gold = run.gold; expect(commitJump(run, port.id).ok).toBe(true); expect(run.terminalOutcome).toBe('lose');
+    expect(initializePort(run, features)).toBe(false); expect(run.activeVisit!.stock).toBeUndefined();
+    expect(purchase(run, createPortStock(run.seed, port.id), 'repair').ok).toBe(false); expect(run.gold).toBe(gold);
   });
 });
